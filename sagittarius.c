@@ -7,36 +7,134 @@
 #include <bio.h>
 #include "icons.h"
 
+/* FORWARD DECLARATIONS */
+void message(char *s, ...);
+
+
+/* GLOBALS */
+
+// Panels
 Panel *root,    // Window root
 	  *statusp, // Upper status bar
 	  *navbarp, // Input navbar
 	  *urlp,    // URL indicator
 	  *textp;   // Text area
 
+// Button images
 Image *backi,
 	  *fwdi,
 	  *reloadi;
 
+// Mouse handler
 Mouse *mouse;
 
-// Right-click popup
+// Right-click popup options
 char *popupopts[] = {
 	"search",
 	"exit",
 	0
 };
 
+enum
+{
+	Msearch,
+	Mexit
+};
 
-// Panel-related stuff
+
+/* HELPERS */
+
+// Update status panel
+void
+message(char *s, ...)
+{
+	static char buffer[1024];
+	char *end;
+	va_list args;
+
+	// concat args in buffer
+	va_start(args, s);
+	end = buffer + vsnprint(buffer, sizeof buffer, s, args);
+	va_end(args);
+	*end = '\0';
+	
+	// Offload buffer contents to status panel
+	plinitlabel(statusp, PACKN|FILLX, buffer);
+
+	// Force redisplay
+	pldraw(statusp, screen);
+	flushimage(display, 1);
+}
+
+
+/* PANEL CONFIGURATION */
+
+// Pop-up menu callback
+void
+popupcallb(int button, int item)
+{
+	USED(button);
+	switch(item) {
+	case Msearch: // Search
+		break;
+	case Mexit:
+		exits(nil);
+		break;
+	}
+}
+
+// Back button callback
+void
+backcb(Panel *p, int b)
+{
+	USED(p);
+	if(!b) return;
+
+	// TODO
+	message("Pressed back");
+}
+
+// Forward button callback
+void
+fwdcb(Panel *p, int b)
+{
+	USED(p);
+	if(!b) return;
+
+	// TODO
+	message("Pressed forward");
+}
+
+// Refresh button callback
+void
+reloadcb(Panel *p, int b)
+{
+	USED(p);
+	if(!b) return;
+
+	// TODO
+	message("Pressed reload");
+}
+
+void
+navbarcb(Panel *p, char *t)
+{
+	USED(p);
+	message("Command entered: %s", t);
+
+	// Reset input and force redisplay
+	plinitentry(navbarp, PACKN|FILLX, 0, "", navbarcb);
+	pldraw(root, screen);
+}
+
+// Panel creation on startup
 void
 makepanels(void)
 {
 	Panel *p, *ybar, *xbar, *m;
 
 	// Generate popup menu
-	// TODO: Replace last 0 with callback
-	// Callback is (int button, int item) -> void
-	m = plmenu(0, 0, popupopts, PACKN|FILLX, 0);
+	m = plmenu(0, 0, popupopts, PACKN|FILLX, popupcallb);
 	root = plpopup(0, EXPAND, 0, 0, m);
 
 	// Upper group
@@ -46,16 +144,14 @@ makepanels(void)
 	statusp = pllabel(p, PACKN|FILLX, "sagittarius");
 	plplacelabel(statusp, PLACEW);
 	// Nav buttons
-	// TODO: Replace last zero with callbacks
-	// Callback is (Panel*, int b) -> void
-	plbutton(p, PACKW|BITMAP|NOBORDER, backi, 0);
-	plbutton(p, PACKW|BITMAP|NOBORDER, fwdi, 0);
-	plbutton(p, PACKW|BITMAP|NOBORDER, reloadi, 0);
+	plbutton(p, PACKW|BITMAP|NOBORDER, backi, backcb);
+	plbutton(p, PACKW|BITMAP|NOBORDER, fwdi, fwdcb);
+	plbutton(p, PACKW|BITMAP|NOBORDER, reloadi, reloadcb);
 
 	// Navbar with label
 	pllabel(p, PACKW, "Go:");
 	// TODO: Replace last zero with callbacks
-	navbarp = plentry(p, PACKN|FILLX, 0, "", 0);
+	navbarp = plentry(p, PACKN|FILLX, 0, "", navbarcb);
 
 	// URL group
 	p = plgroup(root, PACKN|FILLX);
@@ -142,6 +238,10 @@ main(int argc, char **argv)
 			switch(e.kbdc) {
 				case Kdel:
 					exits(nil);
+					break;
+				default:
+					plgrabkb(navbarp);
+					plkeyboard(e.kbdc);
 					break;
 			}
 			break;
