@@ -15,14 +15,17 @@ plain text protocol resembling Gopher, for a much simpler
 and elegant web.
 
 This project is HEAVILY inspired by Gopher[1], a browser
-for the homonimous protocol, and Gemnine[2], a
-console-only Gemini browser for Plan 9.
+for the homonimous protocol, and Gemnine[2], a console
+Gemini browser for Plan 9.
 
 [1] https://github.com/telephil9/gopher
 [2] https://git.sr.ht/~ft/gemnine
 
 Installation
 ------------
+NOTE: THIS APPLICATION DOES NOT WORK YET. You way want to
+wait for more updates before installing it on your system.
+
 First of all, notice that this project was designed to work
 with Plan 9, more specifically with 9front. I have not
 tested this with other Plan 9 distributions nor with tools
@@ -47,6 +50,15 @@ To open sagittarius, use
 
 if address is not supplied, it will automatically load
 gemini://gemini.circumlunar.space.
+
+Extras
+------
+I might make some extra goodies to help on development.
+And I might also include them here. Here is a list of what
+you may find.
+
+- extra/geminispec.rc
+  A small script which opens mothra on the Gemini spec.
 
 License
 -------
