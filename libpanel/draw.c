@@ -17,21 +17,13 @@ static int plldepth;
 static Image *pl_white, *pl_light, *pl_dark, *pl_black, *pl_hilit;
 int pl_drawinit(int ldepth){
 	plldepth=ldepth;
-/*
 	pl_white=allocimage(display, Rect(0,0,1,1), screen->chan, 1, 0xFFFFFFFF);
-	pl_light=allocimage(display, Rect(0,0,1,1), screen->chan, 1, 0xAAAAAAFF);
-	pl_dark =allocimage(display, Rect(0,0,1,1), screen->chan, 1, 0x555555FF);
+	//pl_light=allocimagemix(display, DPalebluegreen, DWhite);
+	pl_light=display->white;
+	//pl_dark =allocimage(display, Rect(0,0,1,1), screen->chan, 1, DPurpleblue);
+	pl_dark = allocimage(display, Rect(0, 0, 1, 1), screen->chan, 1, 0X999999FF);
 	pl_black=allocimage(display, Rect(0,0,1,1), screen->chan, 1, 0x000000FF);
 	pl_hilit=allocimage(display, Rect(0,0,1,1), CHAN1(CAlpha,8), 1, 0x80);
-*/
-
-	pl_white=allocimage(display, Rect(0,0,1,1), screen->chan, 1, 0xFFFFFFFF);
-	pl_light=allocimagemix(display, DPalebluegreen, DWhite);
-	pl_dark =allocimage(display, Rect(0,0,1,1), screen->chan, 1, DPurpleblue);
-	pl_black=allocimage(display, Rect(0,0,1,1), screen->chan, 1, 0x000000FF);
-	pl_hilit=allocimage(display, Rect(0,0,1,1), CHAN1(CAlpha,8), 1, 0x80);
-
-
 	if(pl_white==0 || pl_light==0 || pl_black==0 || pl_dark==0) return 0;
 	return 1;
 }
@@ -79,10 +71,14 @@ Rectangle pl_boxoutline(Image *b, Rectangle r, int style, int fill){
 	}
 	else switch(style){
 	case UP:
+		/*
 		pl_relief(b, pl_white, pl_black, r, BWID);
 		r=insetrect(r, BWID);
 		if(fill) draw(b, r, pl_light, 0, ZP);
 		else border(b, r, SPACE, pl_white, ZP);
+		*/
+		draw(b, r, pl_light, 0, ZP);
+		border(b, r, 1, pl_black, ZP);
 		break;
 	case DOWN:
 	case DOWN1:
@@ -99,12 +95,15 @@ Rectangle pl_boxoutline(Image *b, Rectangle r, int style, int fill){
 		if(!fill) border(b, r, SPACE, pl_white, ZP);
 		break;
 	case FRAME:
+		border(b, r, 1, pl_black, ZP);
+		/*
 		pl_relief(b, pl_white, pl_black, r, FWID);
 		r=insetrect(r, FWID);
 		pl_relief(b, pl_black, pl_white, r, FWID);
 		r=insetrect(r, FWID);
 		if(fill) draw(b, r, pl_light, 0, ZP);
 		else border(b, r, SPACE, pl_white, ZP);
+		*/
 		break;
 	}
 	return insetrect(r, SPACE);
@@ -114,6 +113,40 @@ Rectangle pl_outline(Image *b, Rectangle r, int style){
 }
 Rectangle pl_box(Image *b, Rectangle r, int style){
 	return pl_boxoutline(b, r, style, 1);
+}
+Rectangle pl_boxoutlinef(Image *b, Rectangle r, int flags, int style, int fill){
+	switch(style){
+	case UP:
+		draw(b, r, pl_light, 0, ZP);
+		if(!(flags&NOBORDER))
+			border(b, r, 1, pl_black, ZP);
+		break;
+	case DOWN:
+	case DOWN1:
+	case DOWN2:
+	case DOWN3:
+		if(!(flags&NOBORDER))
+			pl_relief(b, pl_black, pl_white, r, BWID);
+		r=insetrect(r, BWID);
+		if(fill) draw(b, r, pl_dark, 0, ZP);
+		else if(!(flags&NOBORDER)) border(b, r, SPACE, pl_black, ZP);
+		break;
+	case PASSIVE:
+		if(fill) draw(b, r, pl_light, 0, ZP);
+		r=insetrect(r, PWID);
+		if(!fill) border(b, r, SPACE, pl_white, ZP);
+		break;
+	case FRAME:
+		border(b, r, 1, pl_black, ZP);
+		break;
+	}
+	return insetrect(r, SPACE);
+}
+Rectangle pl_outlinef(Image *b, Rectangle r, int flags, int style){
+	return pl_boxoutlinef(b, r, flags, style, 0);
+}
+Rectangle pl_boxf(Image *b, Rectangle r, int flags, int style){
+	return pl_boxoutlinef(b, r, flags, style, 1);
 }
 Point pl_boxsize(Point interior, int state){
 	switch(state){
@@ -149,11 +182,10 @@ void pl_interior(int state, Point *ul, Point *size){
 		*size=subpt(*size, Pt(4*FWID+2*SPACE, 4*FWID+2*SPACE));
 	}
 }
+
 void pl_drawicon(Image *b, Rectangle r, int stick, int flags, Icon *s){
 	Rectangle save;
 	Point ul, offs;
-	save=b->clipr;
-	replclipr(b, b->repl, r);
 	ul=r.min;
 	offs=subpt(subpt(r.max, r.min), pl_iconsize(flags, s));
 	switch(stick){
@@ -167,6 +199,10 @@ void pl_drawicon(Image *b, Rectangle r, int stick, int flags, Icon *s){
 	case PLACES:	ul.x+=offs.x/2; ul.y+=offs.y;   break;
 	case PLACESE:	ul.x+=offs.x;   ul.y+=offs.y;   break;
 	}
+	save=b->clipr;
+	if(!rectclip(&r, save))
+		return;
+	replclipr(b, b->repl, r);
 	if(flags&BITMAP) draw(b, Rpt(ul, addpt(ul, pl_iconsize(flags, s))), s, 0, ZP);
 	else string(b, ul, pl_black, ZP, font, s);
 	replclipr(b, b->repl, save);
@@ -250,7 +286,7 @@ void pl_sliderupd(Image *b, Rectangle r1, int dir, int lo, int hi){
 }
 void pl_draw1(Panel *p, Image *b);
 void pl_drawall(Panel *p, Image *b){
-	if(p->flags&INVIS) return;
+	if(p->flags&INVIS || p->flags&IGNORE) return;
 	p->b=b;
 	p->draw(p);
 	for(p=p->child;p;p=p->next) pl_draw1(p, b);
@@ -261,7 +297,6 @@ void pl_draw1(Panel *p, Image *b){
 }
 void pldraw(Panel *p, Image *b){
 	pl_draw1(p, b);
-	flushimage(display, 1);
 }
 void pl_invis(Panel *p, int v){
 	for(;p;p=p->next){

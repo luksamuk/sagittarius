@@ -21,6 +21,7 @@ int pl_hitpopup(Panel *g, Mouse *m){
 	Panel *p;
 	Point d;
 	Popup *pp;
+
 	pp=g->data;
 	if(g->state==UP){
 		switch(m->buttons&7){
@@ -64,15 +65,17 @@ int pl_hitpopup(Panel *g, Mouse *m){
 			if(g->state!=DOWN){
 				if(pp->save!=0){
 					draw(g->b, p->r, pp->save, 0, p->r.min);
-					flushimage(display, 1);
 					freeimage(pp->save);
+					pp->save=0;
 				}
 				pl_invis(p, 1);
 			}
 			g->state=UP;
 		}
 	}
-	plmouse(p, *m);
+	plmouse(p, m);
+	if((m->buttons&7)==0)
+		g->state=UP;
 	return (m->buttons&7)!=0;
 }
 void pl_typepopup(Panel *g, Rune c){

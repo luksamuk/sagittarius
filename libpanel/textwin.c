@@ -26,6 +26,9 @@
 #include <event.h>
 #include <panel.h>
 #include "pldefs.h"
+
+#define SLACK 100
+
 /*
  * Is text at point a before or after that at point b?
  */
@@ -61,13 +64,9 @@ Point tw_rune2pt(Textwin *t, int i){
  */
 void tw_storeloc(Textwin *t, int l, Point p){
 	int nloc;
-	if(l>t->eloc-t->loc){
-		nloc=l+100;
-		t->loc=realloc(t->loc, nloc*sizeof(Point));
-		if(t->loc==0){
-			fprint(2, "No mem in tw_storeloc\n");
-			exits("no mem");
-		}
+	if(l>=t->eloc-t->loc){
+		nloc=l+SLACK;
+		t->loc=pl_erealloc(t->loc, nloc*sizeof(Point));
 		t->eloc=t->loc+nloc;
 	}
 	t->loc[l]=p;
@@ -225,8 +224,10 @@ void twselect(Textwin *t, Mouse *m){
 	p1=addpt(p0, Pt(1, 0));
 	twhilite(t, sel0, sel1, 1);
 	for(;;){
+		if(display->bufp > display->buf)
+			flushimage(display, 1);
 		*m=emouse();
-		if(m->buttons==0) break;
+		if((m->buttons&7)!=1) break;
 		newsel=twpt2rune(t, m->xy);
 		newp=tw_rune2pt(t, newsel);
 		if(eqpt(newp, p0)) newp=addpt(newp, Pt(1, 0));
@@ -366,8 +367,7 @@ void tw_relocate(Textwin *t, int first, int last, Point dst){
 	int nbyte;
 	if(first<t->top || last<first || t->bot<last) return;
 	nbyte=(last-first+1)*sizeof(Point);
-	srcloc=malloc(nbyte);
-	if(srcloc==0) return;
+	srcloc=pl_emalloc(nbyte);
 	memmove(srcloc, &t->loc[first-t->top], nbyte);
 	tw_setloc(t, first, last, dst);
 	if(tw_before(t, dst, srcloc[0]))
@@ -387,19 +387,15 @@ void tw_relocate(Textwin *t, int first, int last, Point dst){
  */
 void twreplace(Textwin *t, int r0, int r1, Rune *ins, int nins){
 	int olen, nlen, tlen, dtop;
-	Rune *ntext;
 	olen=t->etext-t->text;
-	nlen=olen+r0-r1+nins;
+	nlen=olen+nins-(r1-r0);
 	tlen=t->eslack-t->text;
 	if(nlen>tlen){
-		tlen=nlen+100;
-		ntext=malloc(tlen*sizeof(Rune));
-		memmove(ntext, t->text, r0*sizeof(Rune));
-		memmove(ntext+r0+nins, t->text+r1, (olen-r1)*sizeof(Rune));
-		t->text=ntext;
-		t->eslack=ntext+tlen;
+		tlen=nlen+SLACK;
+		t->text=pl_erealloc(t->text, tlen*sizeof(Rune));
+		t->eslack=t->text+tlen;
 	}
-	else if(olen!=nlen)
+	if(olen!=nlen)
 		memmove(t->text+r0+nins, t->text+r1, (olen-r1)*sizeof(Rune));
 	if(nins!=0)	/* ins can be 0 if nins==0 */
 		memmove(t->text+r0, ins, nins*sizeof(Rune));
@@ -442,22 +438,12 @@ void twreshape(Textwin *t, Rectangle r){
 }
 Textwin *twnew(Image *b, Font *f, Rune *text, int ntext){
 	Textwin *t;
-	t=malloc(sizeof(Textwin));
-	if(t==0) return 0;
-	t->text=malloc((ntext+100)*sizeof(Rune));
-	if(t->text==0){
-		free(t);
-		return 0;
-	}
-	t->loc=malloc(100*sizeof(Point));
-	if(t->loc==0){
-		free(t->text);
-		free(t);
-		return 0;
-	}
-	t->eloc=t->loc+100;
+	t=pl_emalloc(sizeof(Textwin));
+	t->text=pl_emalloc((ntext+SLACK)*sizeof(Rune));
+	t->loc=pl_emalloc(SLACK*sizeof(Point));
+	t->eloc=t->loc+SLACK;
 	t->etext=t->text+ntext;
-	t->eslack=t->etext+100;
+	t->eslack=t->etext+SLACK;
 	if(ntext) memmove(t->text, text, ntext*sizeof(Rune));
 	t->top=0;
 	t->bot=0;

@@ -14,8 +14,18 @@ void *pl_emalloc(int n){
 	setmalloctag(v, getcallerpc(&n));
 	return v;
 }
+void *pl_erealloc(void *v, int n)
+{
+	v=realloc(v, n);
+	if(v==0){
+		fprint(2, "Can't realloc!\n");
+		exits("no mem");
+	}
+	setrealloctag(v, getcallerpc(&v));
+	return v;
+}
 void pl_unexpected(Panel *g, char *rou){
-	fprint(2, "%s called unexpectedly (%s %lux)\n", rou, g->kind, (ulong)g);
+	fprint(2, "%s called unexpectedly (%s %#p)\n", rou, g->kind, g);
 	abort();
 }
 void pl_drawerror(Panel *g){
@@ -52,7 +62,7 @@ int pl_prinormal(Panel *, Point){
 Panel *pl_newpanel(Panel *parent, int ndata){
 	Panel *v;
 	if(parent && parent->flags&LEAF){
-		fprint(2, "newpanel: can't create child of %s %lux\n", parent->kind, (ulong)parent);
+		fprint(2, "newpanel: can't create child of %s %#p\n", parent->kind, parent);
 		exits("bad newpanel");
 	}
 	v=pl_emalloc(sizeof(Panel));
@@ -89,6 +99,8 @@ Panel *pl_newpanel(Panel *parent, int ndata){
 	v->scroll=pl_scrollerror;
 	v->setscrollbar=pl_setscrollbarerror;
 	v->free=0;
+	v->snarf=0;
+	v->paste=0;
 	if(ndata)
 		v->data=pl_emalloc(ndata);
 	else
@@ -99,6 +111,8 @@ void plfree(Panel *p){
 	Panel *cp, *ncp;
 	if(p==0)
 		return;
+	if(p==plkbfocus)
+		plkbfocus=0;
 	for(cp=p->child;cp;cp=ncp){
 		ncp=cp->next;
 		plfree(cp);

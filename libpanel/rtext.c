@@ -9,20 +9,26 @@
 #include <panel.h>
 #include "pldefs.h"
 #include "rtext.h"
-#define	LEAD	4		/* extra space between lines */
-Rtext *pl_rtnew(Rtext **t, int space, int indent, Image *b, Panel *p, Font *f, char *s, int hot, void *user){
+
+#define LEAD	4	/* extra space between lines */
+#define BORD	2	/* extra border for images */
+
+static Image *head, *blue;
+
+Rtext *pl_rtnew(Rtext **t, int space, int indent, int voff, Image *b, Panel *p, Font *f, char *s, int flags, void *user){
 	Rtext *new;
-	new=malloc(sizeof(Rtext));
-	if(new==0) return 0;
-	new->hot=hot;
+	new=pl_emalloc(sizeof(Rtext));
+	new->flags=flags;
 	new->user=user;
 	new->space=space;
 	new->indent=indent;
+	new->voff=voff;
 	new->b=b;
 	new->p=p;
 	new->font=f;
 	new->text=s;
 	new->next=0;
+	new->nextline=0;
 	new->r=Rect(0,0,0,0);
 	if(*t)
 		(*t)->last->next=new;
@@ -31,14 +37,14 @@ Rtext *pl_rtnew(Rtext **t, int space, int indent, Image *b, Panel *p, Font *f, c
 	(*t)->last=new;
 	return new;
 }
-Rtext *plrtpanel(Rtext **t, int space, int indent, Panel *p, void *user){
-	return pl_rtnew(t, space, indent, 0, p, 0, 0, 1, user);
+Rtext *plrtpanel(Rtext **t, int space, int indent, int voff, Panel *p, void *user){
+	return pl_rtnew(t, space, indent, voff, 0, p, 0, 0, 1, user);
 }
-Rtext *plrtstr(Rtext **t, int space, int indent, Font *f, char *s, int hot, void *user){
-	return pl_rtnew(t, space, indent, 0, 0, f, s, hot, user);
+Rtext *plrtstr(Rtext **t, int space, int indent, int voff, Font *f, char *s, int flags, void *user){
+	return pl_rtnew(t, space, indent, voff, 0, 0, f, s, flags, user);
 }
-Rtext *plrtbitmap(Rtext **t, int space, int indent, Image *b, int hot, void *user){
-	return pl_rtnew(t, space, indent, b, 0, 0, 0, hot, user);
+Rtext *plrtbitmap(Rtext **t, int space, int indent, int voff, Image *b, int flags, void *user){
+	return pl_rtnew(t, space, indent, voff, b, 0, 0, 0, flags, user);
 }
 void plrtfree(Rtext *t){
 	Rtext *next;
@@ -64,14 +70,16 @@ int pl_space(int space, int pos, int indent){
 }
 /*
  * initialize rectangles & nextlines of text starting at t,
- * galley width is wid.  Returns the total length of the text
+ * galley width is wid.  Returns the total width/height of the text
  */
-int pl_rtfmt(Rtext *t, int wid){
+Point pl_rtfmt(Rtext *t, int wid){
 	Rtext *tp, *eline;
-	int ascent, descent, x, space, a, d, w, topy, indent;
+	int ascent, descent, x, space, a, d, w, topy, indent, maxwid;
 	Point p;
+
 	p=Pt(0,0);
 	eline=t;
+	maxwid=0;
 	while(t){
 		ascent=0;
 		descent=0;
@@ -80,9 +88,9 @@ int pl_rtfmt(Rtext *t, int wid){
 		tp=t;
 		for(;;){
 			if(tp->b){
-				a=tp->b->r.max.y-tp->b->r.min.y+2;
-				d=0;
-				w=tp->b->r.max.x-tp->b->r.min.x+4;
+				a=tp->b->r.max.y-tp->b->r.min.y+BORD;
+				d=BORD;
+				w=tp->b->repl?wid-x:tp->b->r.max.x-tp->b->r.min.x+BORD*2;
 			}
 			else if(tp->p){
 				/* what if plpack fails? */
@@ -97,6 +105,7 @@ int pl_rtfmt(Rtext *t, int wid){
 				d=tp->font->height-a;
 				w=tp->wid=stringwidth(tp->font, tp->text);
 			}
+			a-=tp->voff,d+=tp->voff;
 			if(x+w+space>wid) break;
 			if(a>ascent) ascent=a;
 			if(d>descent) descent=d;
@@ -110,11 +119,11 @@ int pl_rtfmt(Rtext *t, int wid){
 			if(space) eline=tp;
 		}
 		if(eline==t){	/* No progress!  Force fit the first block! */
-			if(a>ascent) ascent=a;
-			if(d>descent) descent=d;
-			if(tp==t)
+			if(tp==t){
+				if(a>ascent) ascent=a;
+				if(d>descent) descent=d;
 				eline=tp->next;
-			else
+			}else
 				eline=tp;
 		}
 		topy=p.y;
@@ -123,11 +132,11 @@ int pl_rtfmt(Rtext *t, int wid){
 		for(;;){
 			t->topy=topy;
 			t->r.min.x=p.x;
+			p.y+=t->voff;
 			if(t->b){
-				t->r.max.y=p.y;
-				t->r.min.y=p.y-(t->b->r.max.y-t->b->r.min.y);
-				p.x+=t->b->r.max.x-t->b->r.min.x+2;
-				t->r=rectaddpt(t->r, Pt(2, 2));
+				t->r.max.y=p.y+BORD;
+				t->r.min.y=p.y-(t->b->r.max.y-t->b->r.min.y)-BORD;
+				p.x+=t->b->repl?wid-p.x:(t->b->r.max.x-t->b->r.min.x)+BORD*2;
 			}
 			else if(t->p){
 				t->r.max.y=p.y;
@@ -139,48 +148,114 @@ int pl_rtfmt(Rtext *t, int wid){
 				t->r.max.y=t->r.min.y+t->font->height;
 				p.x+=t->wid;
 			}
+			p.y-=t->voff;
 			t->r.max.x=p.x;
 			t->nextline=eline;
 			t=t->next;
 			if(t==eline) break;
 			p.x+=pl_space(t->space, p.x, indent);
 		}
+		if(p.x>maxwid) maxwid=p.x;
 		p.y+=descent+LEAD;
 	}
-	return p.y;
+	return Pt(maxwid, p.y);
 }
-void pl_rtdraw(Image *b, Rectangle r, Rtext *t, int yoffs){
-	Point offs;
+
+/*
+ * If we draw the text in a backup bitmap and copy it onto the screen,
+ * the bitmap pointers in all the subpanels point to the wrong bitmap.
+ * This code fixes them.
+ */
+void pl_stuffbitmap(Panel *p, Image *b){
+	p->b=b;
+	for(p=p->child;p;p=p->next)
+		pl_stuffbitmap(p, b);
+}
+
+void pl_rtdraw(Image *b, Rectangle r, Rtext *t, Point offs){
+	static Image *backup;
+	Point lp, sp;
 	Rectangle dr;
-	Rectangle cr;
-	cr=b->clipr;
-	replclipr(b, b->repl, r);
+	Image *bb;
+
+	bb = b;
+	if(backup==0 || backup->chan!=b->chan || rectinrect(r, backup->r)==0){
+		freeimage(backup);
+		backup=allocimage(display, bb->r, bb->chan, 0, DNofill);
+	}
+	if(backup)
+		b=backup;
 	pl_clr(b, r);
-	offs=subpt(r.min, Pt(0, yoffs));
+	lp=ZP;
+	sp=ZP;
+	offs=subpt(r.min, offs);
 	for(;t;t=t->next) if(!eqrect(t->r, Rect(0,0,0,0))){
 		dr=rectaddpt(t->r, offs);
 		if(dr.max.y>r.min.y
-		&& dr.min.y<r.max.y){
+		&& dr.min.y<r.max.y
+		&& dr.max.x>r.min.x
+		&& dr.min.x<r.max.x){
 			if(t->b){
-//				bitblt(b, dr.min, t->b, t->b->r, S|D);
-				draw(b, Rpt(dr.min, addpt(dr.min, subpt(t->b->r.max, t->b->r.min))), t->b, 0, t->b->r.min);
-				if(t->hot) border(b, insetrect(dr, -2), 1, display->black, ZP);
+				draw(b, insetrect(dr, BORD), t->b, 0, t->b->r.min);
+				if(t->flags&PL_HOT) border(b, dr, 1, display->black, ZP);
+				if(t->flags&PL_STR) {
+					line(b, Pt(dr.min.x, dr.min.y), Pt(dr.max.x, dr.max.y),
+						Endsquare, Endsquare, 0,
+						display->black, ZP);
+					line(b, Pt(dr.min.x, dr.max.y), Pt(dr.max.x, dr.min.y),
+						Endsquare, Endsquare, 0,
+						display->black, ZP);
+				}
+				if(t->flags&PL_SEL)
+					pl_highlight(b, dr);
 			}
 			else if(t->p){
 				plmove(t->p, subpt(dr.min, t->p->r.min));
 				pldraw(t->p, b);
+				if(b!=bb)
+					pl_stuffbitmap(t->p, bb);
 			}
 			else{
-				string(b, dr.min, display->black, ZP, t->font, t->text);
-				if(t->hot)
-					line(b, Pt(dr.min.x, dr.max.y-1),
-						Pt(dr.max.x, dr.max.y-1),
+				if(t->flags&PL_HEAD){
+					if(head==nil)
+						head=allocimage(display, Rect(0,0,1,1), screen->chan, 1, 0xAAAAAAFF);
+					string(b, dr.min, head, ZP, t->font, t->text);
+				}else if(t->flags&PL_HOT){
+					if(blue==nil)
+						blue=allocimage(display, Rect(0,0,1,1), screen->chan, 1, 0x0000FFFF);
+					string(b, dr.min, blue, ZP, t->font, t->text);
+				}else
+					string(b, dr.min, display->black, ZP, t->font, t->text);
+				if(t->flags&PL_SEL)
+					pl_highlight(b, dr);
+				if(t->flags&PL_STR){
+					int y = dr.max.y - t->font->height/2;
+					if(sp.y != y)
+						sp = Pt(dr.min.x, y);
+					line(b, sp, Pt(dr.max.x, y),
 						Endsquare, Endsquare, 0,
 						display->black, ZP);
+					sp = Pt(dr.max.x, y);
+				} else
+					sp = ZP;
+				/*if(t->flags&PL_HOT){
+					int y = dr.max.y - 1;
+					if(lp.y != y)
+						lp = Pt(dr.min.x, y);
+					line(b, lp, Pt(dr.max.x, y),
+						Endsquare, Endsquare, 0,
+						display->black, ZP);
+					lp = Pt(dr.max.x, y);
+				} else*/
+					lp = ZP;
+				continue;
 			}
+			lp = ZP;
+			sp = ZP;
 		}
 	}
-	replclipr(b, b->repl, cr);
+	if(b!=bb)
+		draw(bb, r, b, 0, r.min);
 }
 /*
  * Reposition text already drawn in the window.
@@ -199,32 +274,110 @@ void pl_reposition(Rtext *t, Image *b, Point p, Rectangle r){
  * Rectangle r of Image b contains an image of Rtext t, offset by oldoffs.
  * Redraw the text to have offset yoffs.
  */
-void pl_rtredraw(Image *b, Rectangle r, Rtext *t, int yoffs, int oldoffs){
-	int dy, size;
-	dy=oldoffs-yoffs;
-	size=r.max.y-r.min.y;
-	if(dy>=size || -dy>=size)
-		pl_rtdraw(b, r, t, yoffs);
-	else if(dy<0){
-		pl_reposition(t, b, r.min,
-			Rect(r.min.x, r.min.y-dy, r.max.x, r.max.y));
-		pl_rtdraw(b, Rect(r.min.x, r.max.y+dy, r.max.x, r.max.y),
-			t, yoffs+size+dy);
-	}
-	else if(dy>0){
-		pl_reposition(t, b, Pt(r.min.x, r.min.y+dy),
-			Rect(r.min.x, r.min.y, r.max.x, r.max.y-dy));
-		pl_rtdraw(b, Rect(r.min.x, r.min.y, r.max.x, r.min.y+dy), t, yoffs);
+void pl_rtredraw(Image *b, Rectangle r, Rtext *t, Point offs, Point oldoffs, int dir){
+	int d, size;
+
+	if(dir==VERT){
+		d=oldoffs.y-offs.y;
+		size=r.max.y-r.min.y;
+		if(d>=size || -d>=size) /* move more than screenful */
+			pl_rtdraw(b, r, t, offs);
+		else if(d<0){ /* down */
+			pl_reposition(t, b, r.min,
+				Rect(r.min.x, r.min.y-d, r.max.x, r.max.y));
+			pl_rtdraw(b, Rect(r.min.x, r.max.y+d, r.max.x, r.max.y),
+				t, Pt(offs.x, offs.y+size+d));
+		}
+		else if(d>0){ /* up */
+			pl_reposition(t, b, Pt(r.min.x, r.min.y+d),
+				Rect(r.min.x, r.min.y, r.max.x, r.max.y-d));
+			pl_rtdraw(b, Rect(r.min.x, r.min.y, r.max.x, r.min.y+d),
+				t, offs);
+		}
+	}else{ /* dir==HORIZ */
+		d=oldoffs.x-offs.x;
+		size=r.max.x-r.min.x;
+		if(d>=size || -d>=size) /* move more than screenful */
+			pl_rtdraw(b, r, t, offs);
+		else if(d<0){ /* right */
+			pl_reposition(t, b, r.min,
+				Rect(r.min.x-d, r.min.y, r.max.x, r.max.y));
+			pl_rtdraw(b, Rect(r.max.x+d, r.min.y, r.max.x, r.max.y),
+				t, Pt(offs.x+size+d, offs.y));
+		}
+		else if(d>0){ /* left */
+			pl_reposition(t, b, Pt(r.min.x+d, r.min.y),
+				Rect(r.min.x, r.min.y, r.max.x-d, r.max.y));
+			pl_rtdraw(b, Rect(r.min.x, r.min.y, r.min.x+d, r.max.y),
+				t, offs);
+		}		
 	}
 }
-Rtext *pl_rthit(Rtext *t, int yoffs, Point p, Point ul){
+Rtext *pl_rthit(Rtext *t, Point offs, Point p, Point ul){
+	Rectangle r;
+	Point lp;
 	if(t==0) return 0;
-	p.x-=ul.x;
-	p.y+=yoffs-ul.y;
+	p.x+=offs.x-ul.x;
+	p.y+=offs.y-ul.y;
 	while(t->nextline && t->nextline->topy<=p.y) t=t->nextline;
+	lp=ZP;
 	for(;t!=0;t=t->next){
 		if(t->topy>p.y) return 0;
-		if(ptinrect(p, t->r)) return t;
+		r = t->r;
+		if((t->flags&PL_HOT) != 0 && t->b == nil && t->p == nil){
+			if(lp.y == r.max.y && lp.x < r.min.x)
+				r.min.x=lp.x;
+			lp=r.max;
+		} else
+			lp=ZP;
+		if(ptinrect(p, r)) return t;
 	}
 	return 0;
+}
+
+void plrtseltext(Rtext *t, Rtext *s, Rtext *e){
+	while(t){
+		t->flags &= ~PL_SEL;
+		t = t->next;
+	}
+	if(s==0 || e==0)
+		return;
+	for(t=s; t!=0 && t!=e; t=t->next)
+		;
+	if(t==e){
+		for(t=s; t!=e; t=t->next)
+			t->flags |= PL_SEL;
+	}else{
+		for(t=e; t!=s; t=t->next)
+			t->flags |= PL_SEL;
+	}
+	t->flags |= PL_SEL;
+}
+
+char *plrtsnarftext(Rtext *w){
+	char *b, *p, *e, *t;
+	int n;
+
+	b=p=e=0;
+	for(; w; w = w->next){
+		if((w->flags&PL_SEL)==0 || w->text==0)
+			continue;
+		n = strlen(w->text)+64;
+		if(p+n >= e){
+			n = (p+n+64)-b;
+			t = pl_erealloc(b, n);
+			p = t+(p-b);
+			e = t+n;
+			b = t;
+		}
+		if(w->space == 0)
+			p += sprint(p, "%s", w->text);
+		else if(w->space > 0)
+			p += sprint(p, " %s", w->text);
+		else if(PL_OP(w->space) == PL_TAB)
+			p += sprint(p, "\t%s", w->text);
+		if(w->nextline == w->next)
+			p += sprint(p, "\n");
+	}
+	return b;
 }

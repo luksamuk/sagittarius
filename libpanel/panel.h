@@ -9,10 +9,11 @@ struct Scroll{
 	Point pos, size;
 };
 struct Rtext{
-	int hot;		/* responds to hits? */
+	int flags;		/* responds to hits? text selection? */
 	void *user;		/* user data */
 	int space;		/* how much space before, if no break */
 	int indent;		/* how much space before, after a break */
+	int voff;		/* vertical offset (for subscripts and superscripts) */
 	Image *b;		/* what to display, if nonzero */
 	Panel *p;		/* what to display, if nonzero and b==0 */
 	Font *font;		/* font in which to draw text */
@@ -55,10 +56,11 @@ struct Panel{
 	void (*scroll)(Panel *, int, int, int, int);	/* scroll bar to scrollee */
 	void (*setscrollbar)(Panel *, int, int, int);	/* scrollee to scroll bar */
 	void (*free)(Panel *);				/* free fields of data when done */
+	char* (*snarf)(Panel *);			/* snarf text from panel */
+	void (*paste)(Panel *, char *);			/* paste text into panel */
 };
 /*
- * Panel flags -- there are more private flags in panelprivate.h
- * that need to be kept synchronized with these!
+ * Panel flags
  */
 #define	PACK	0x0007		/* which side of the parent is the Panel attached to? */
 #define		PACKN	0x0000
@@ -85,6 +87,11 @@ struct Panel{
 #define	MAXX	0x1000		/* make x size as big as biggest sibling's */
 #define	MAXY	0x2000		/* make y size as big as biggest sibling's */
 #define	BITMAP	0x4000		/* text argument is a bitmap, not a string */
+#define NOBORDER 0x8000
+/* pldefs.h flags 0x08000-0x40000 */
+#define IGNORE	0x080000	/* ignore this panel totally */
+#define USERFL	0x100000	/* start of user flag */
+
 /*
  * An extra bit in Mouse.buttons
  */
@@ -95,14 +102,23 @@ struct Panel{
 #define	PRI_NORMAL	0		/* ordinary panels */
 #define	PRI_POPUP	1		/* popup menus */
 #define	PRI_SCROLLBAR	2		/* scroll bars */
+
+/* Rtext.flags */
+#define PL_HOT		1
+#define PL_SEL		2
+#define PL_STR		4
+#define PL_HEAD		8
+
+Panel *plkbfocus;			/* the panel in keyboard focus */
+
 int plinit(int);			/* initialization */
-int plpack(Panel *, Rectangle);		/* figure out where to put the Panel & children */
+void plpack(Panel *, Rectangle);	/* figure out where to put the Panel & children */
 void plmove(Panel *, Point);		/* move an already-packed panel to a new location */
 void pldraw(Panel *, Image *);		/* display the panel on the bitmap */
 void plfree(Panel *);			/* give back space */
 void plgrabkb(Panel *);			/* this Panel should receive keyboard events */
 void plkeyboard(Rune);			/* send a keyboard event to the appropriate Panel */
-void plmouse(Panel *, Mouse);		/* send a Mouse event to a Panel tree */
+void plmouse(Panel *, Mouse *);		/* send a Mouse event to a Panel tree */
 void plscroll(Panel *, Panel *, Panel *); /* link up scroll bars */
 char *plentryval(Panel *);		/* entry delivers its value */
 void plsetbutton(Panel *, int);		/* set or clear the mark on a button */
@@ -116,6 +132,7 @@ void plescroll(Panel *, int);		/* scroll an edit window */
 Scroll plgetscroll(Panel *);		/* get scrolling information from panel */
 void plsetscroll(Panel *, Scroll);	/* set scrolling information */
 void plplacelabel(Panel *, int);	/* label placement */
+
 /*
  * Panel creation & reinitialization functions
  */
@@ -159,12 +176,16 @@ void plinittextview(Panel *, int, Point, Rtext *, void (*)(Panel *, int, Rtext *
 /*
  * Rtext constructors & destructor
  */
-Rtext *plrtstr(Rtext **, int, int, Font *, char *, int, void *);
-Rtext *plrtbitmap(Rtext **, int, int, Image *, int, void *);
-Rtext *plrtpanel(Rtext **, int, int, Panel *, void *);
+Rtext *plrtstr(Rtext **, int, int, int, Font *, char *, int, void *);
+Rtext *plrtbitmap(Rtext **, int, int, int, Image *, int, void *);
+Rtext *plrtpanel(Rtext **, int, int, int, Panel *, void *);
 void plrtfree(Rtext *);
+void plrtseltext(Rtext *, Rtext *, Rtext *);
+char *plrtsnarftext(Rtext *);
+
 int plgetpostextview(Panel *);
 void plsetpostextview(Panel *, int);
+
 /*
  * Idols
  */
@@ -172,3 +193,11 @@ Idol *plmkidol(Idol**, Image*, Image*, char*, void*);
 void plfreeidol(Idol*);
 Point plidolsize(Idol*, Font*, int);
 void *plidollistgetsel(Panel*);
+
+/*
+ * Snarf
+ */
+void plputsnarf(char *);
+char *plgetsnarf(void);
+void plsnarf(Panel *);			/* snarf a panel */
+void plpaste(Panel *);			/* paste a panel */

@@ -5,10 +5,10 @@
  * Variable-font text routines
  * These could make a separate library.
  */
-int pl_rtfmt(Rtext *, int);
-void pl_rtdraw(Image *, Rectangle, Rtext *, int);
-void pl_rtredraw(Image *, Rectangle, Rtext *, int, int);
-Rtext *pl_rthit(Rtext *, int, Point, Point);
+Point pl_rtfmt(Rtext *, int);
+void pl_rtdraw(Image *, Rectangle, Rtext *, Point);
+void pl_rtredraw(Image *, Rectangle, Rtext *, Point, Point, int);
+Rtext *pl_rthit(Rtext *, Point, Point, Point);
 #define	HITME	0x08000		/* tells ptinpanel not to look at children */
 #define	LEAF	0x10000		/* newpanel will refuse to attach children */
 #define	INVIS	0x20000		/* don't draw this */
@@ -45,6 +45,7 @@ enum{
 };
 Panel *pl_newpanel(Panel *, int);	/* make a new Panel, given parent & data size */
 void *pl_emalloc(int);			/* allocate some space, exit on error */
+void *pl_erealloc(void*,int);		/* reallocate some space, exit on error */
 void pl_print(Panel *);			/* print a Panel tree */
 Panel *pl_ptinpanel(Point, Panel *);	/* highest-priority subpanel containing point */
 /*
@@ -52,6 +53,7 @@ Panel *pl_ptinpanel(Point, Panel *);	/* highest-priority subpanel containing poi
  */
 int pl_drawinit(int);
 Rectangle pl_box(Image *, Rectangle, int);
+Rectangle pl_boxf(Image *b, Rectangle r, int flags, int style);
 Rectangle pl_outline(Image *, Rectangle, int);
 Point pl_boxsize(Point, int);
 void pl_interior(int, Point *, Point *);

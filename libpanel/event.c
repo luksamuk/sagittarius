@@ -4,16 +4,15 @@
 #include <event.h>
 #include <panel.h>
 #include "pldefs.h"
-Panel *pl_kbfocus;
+
 void plgrabkb(Panel *g){
-	pl_kbfocus=g;
+	plkbfocus=g;
 }
 void plkeyboard(Rune c){
-	if(pl_kbfocus){
-		pl_kbfocus->type(pl_kbfocus, c);
-		flushimage(display, 1);
-	}
+	if(plkbfocus)
+		plkbfocus->type(plkbfocus, c);
 }
+
 /*
  * Return the most leafward, highest priority panel containing p
  */
@@ -26,25 +25,24 @@ Panel *pl_ptinpanel(Point p, Panel *g){
 	}
 	return 0;
 }
-void plmouse(Panel *g, Mouse mouse){
+void plmouse(Panel *g, Mouse *m){
 	Panel *hit, *last;
 	if(g->flags&REMOUSE)
 		hit=g->lastmouse;
 	else{
-		hit=pl_ptinpanel(mouse.xy, g);
+		hit=pl_ptinpanel(m->xy, g);
 		last=g->lastmouse;
 		if(last && last!=hit){
-			mouse.buttons|=OUT;
-			last->hit(last, &mouse);
-			mouse.buttons&=~OUT;
+			m->buttons|=OUT;
+			last->hit(last, m);
+			m->buttons&=~OUT;
 		}
 	}
 	if(hit){
-		if(hit->hit(hit, &mouse))
+		if(hit->hit(hit, m))
 			g->flags|=REMOUSE;
 		else
 			g->flags&=~REMOUSE;
 		g->lastmouse=hit;
 	}
-	flushimage(display, 1);
 }

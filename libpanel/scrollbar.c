@@ -12,7 +12,7 @@ struct Scrollbar{
 	Rectangle interior;
 	Point minsize;
 };
-#define	SBWID	15	/* should come from draw.c? */
+#define	SBWID	8	/* should come from draw.c? */
 void pl_drawscrollbar(Panel *p){
 	Scrollbar *sp;
 	sp=p->data;
@@ -28,11 +28,10 @@ int pl_hitscrollbar(Panel *g, Mouse *m){
 	size=subpt(g->r.max, g->r.min);
 	pl_interior(g->state, &ul, &size);
 	oldstate=g->state;
-	if(m->buttons&OUT && m->buttons&7){
-		if(m->xy.y<g->r.min.y) m->xy.y=g->r.min.y;
-		if(m->xy.y>=g->r.max.y) m->xy.y=g->r.max.y-1;
-		if(ptinrect(m->xy, g->r))
-			m->buttons&=~OUT;
+	if(!(g->flags & USERFL) && (m->buttons&OUT || !ptinrect(m->xy, g->r))){
+		m->buttons&=~OUT;
+		g->state=UP;
+		goto out;
 	}
 	if(sp->dir==HORIZ){
 		pos=m->xy.x-ul.x;
@@ -46,25 +45,23 @@ int pl_hitscrollbar(Panel *g, Mouse *m){
 	else if(pos>len) pos=len;
 	if(m->buttons&7){
 		g->state=DOWN;
-		if(g->r.min.x<=m->xy.x && m->xy.x<g->r.max.x){
-			sp->buttons=m->buttons;
-			switch(m->buttons){
-			case 1:
-				dy=pos*(sp->hi-sp->lo)/len;
-				pl_sliderupd(g->b, sp->interior, sp->dir, sp->lo-dy,
-					sp->hi-dy);
-				break;
-			case 2:
-				if(g->scrollee && g->scrollee->scroll)
-					g->scrollee->scroll(g->scrollee, sp->dir,
-						m->buttons, pos, len);
-				break;
-			case 4:
-				dy=pos*(sp->hi-sp->lo)/len;
-				pl_sliderupd(g->b, sp->interior, sp->dir, sp->lo+dy,
-					sp->hi+dy);
-				break;
-			}
+		sp->buttons=m->buttons;
+		switch(m->buttons){
+		case 1:
+			dy=pos*(sp->hi-sp->lo)/len;
+			pl_sliderupd(g->b, sp->interior, sp->dir, sp->lo-dy,
+				sp->hi-dy);
+			break;
+		case 2:
+			if(g->scrollee && g->scrollee->scroll)
+				g->scrollee->scroll(g->scrollee, sp->dir,
+					m->buttons, pos, len);
+			break;
+		case 4:
+			dy=pos*(sp->hi-sp->lo)/len;
+			pl_sliderupd(g->b, sp->interior, sp->dir, sp->lo+dy,
+				sp->hi+dy);
+			break;
 		}
 	}
 	else{
@@ -73,6 +70,7 @@ int pl_hitscrollbar(Panel *g, Mouse *m){
 				pos, len);
 		g->state=UP;
 	}
+out:
 	if(oldstate!=g->state) pldraw(g, g->b);
 	return g->state==DOWN;
 }
