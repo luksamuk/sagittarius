@@ -1,9 +1,11 @@
 #include <u.h>
 #include <libc.h>
+#include <libsec.h>
 #include <draw.h>
 #include <event.h>
 #include <keyboard.h>
 #include <panel.h>
+#include <ctype.h>
 #include <bio.h>
 #include "icons.h"
 
@@ -24,6 +26,12 @@ Panel *root,    // Window root
 Image *backi,
 	  *fwdi,
 	  *reloadi;
+
+// File descriptor for current request
+int reqfd;
+
+// Mimetype for current request
+char *mimetype;
 
 // Mouse handler
 Mouse *mouse;
@@ -68,15 +76,150 @@ message(char *s, ...)
 
 
 /* CONNECTION */
+int
+request(char *addr)
+{
+	Thumbprint *th;
+	TLSconn    conn;
+	int fd, okcert, status_type, status;
+	char buffer[1024];
+	int len, i;
+	char *itr, *dialaddr;
+
+	addr = strdup(addr); // Weird. I know.
+	char *tlsaddr = smprint("gemini://%s", addr);
+
+startreq:
+	// Dialing
+	dialaddr = netmkaddr(addr, "tcp", "1965");
+	message("Dialing %s...", dialaddr);
+	fd = dial(dialaddr, 0, 0, 0);
+	if(fd < 0) {
+		message("dial: %r");
+		goto failure;
+	}
+
+	// TLS handshake
+	message("TLS handshake...");
+	th = initThumbprints("/sys/lib/ssl/gemini", nil, "x509");
+	memset(&conn, 0, sizeof(conn));
+
+	{
+		int oldfd = fd;
+		fd = tlsClient(fd, &conn);
+		close(oldfd);
+	}
+	if(fd < 0) {
+		message("tls: %r");
+		goto failure;
+	}
+
+	if(th != nil) {
+		okcert = okCertificate(conn.cert, conn.certlen, th);
+		freeThumbprints(th);
+		if(!okcert) {
+			message("warn: untrusted certificate");
+			// echo 'x509 %r server=<addr> >> /sys/lib/ssl/gemini
+		}
+	}
+
+	// TLS response
+	message("Finishing TLS handshake...");
+	fprint(fd, "%s\r\n", tlsaddr);
+
+	message("Parsing header...");
+	for(len = 0; len < sizeof(buffer) - 1; len++) {
+		if((i = read(fd, buffer + len, 1)) < 0) {
+			message("read: %r");
+			goto failure;
+		}
+		if(i == 0 || buffer[len] == '\n')
+			break;
+	}
+	buffer[len] = 0;
+
+	itr = buffer;
+	for(len--; len >= 0 &&
+		  (itr[len] == '\r' || itr[len] == '\n');
+		len--) {
+		itr[len] = 0;
+	}
+
+	if(!isdigit(itr[0]) || !isdigit(itr[1])) {
+		message("error: invalid status code");
+		goto failure;
+	}
+
+	// Parse status code
+	status_type = 10 * (itr[0] - '0');
+	status      = status_type + (itr[1] - '0');
+
+
+	// Cleanup whitespace until next field
+	while(isspace(*itr)) {
+		itr++;
+	}
+	itr += 2;
+	while(isspace(*itr)) {
+		itr++;
+	}
+
+	char *tokstart;
+	switch(status_type) {
+	case 10: // 1x input
+		message("%d input", status);
+		mimetype = nil;
+		break;
+	case 20: // 2x success
+		if(mimetype != nil) free(mimetype);
+		mimetype = strdup(itr[0] ? itr : "text/gemini");
+		message("Success");
+		break;
+	case 30: // 3x redirect
+		mimetype = nil;
+		free(addr);
+		free(tlsaddr);
+		tlsaddr = strdup(itr);
+		if((tokstart = strpbrk(itr, ":/")) != nil
+		   && tokstart[0] == ':'
+		   && tokstart[1] == '/'
+		   && tokstart[2] == '/') {
+			tokstart[2] = 0;
+			tokstart = cleanname(tokstart + 3);
+			addr = strdup(tokstart);
+		} else addr = tlsaddr;
+		message("Redirecting to %s...", addr);
+		goto startreq;
+		break;
+	case 40: // 4x temporary failure
+		mimetype = nil;
+		message("%d temporary failure", status);
+		break;
+	case 50: // 5x permanent failure
+		mimetype = nil;
+		message("%d permanent failure", status);
+		break;
+	default:
+		mimetype = nil;
+		message("Unknown status code %d", status);
+		break;
+	}
+
+failure:
+	free(addr);
+	free(tlsaddr);
+	return fd;
+}
+
+void rendertext();
+
 void
 visit(char *addr)
 {
-	// TODO
-	char *proper_addr = netmkaddr(addr, "tcp", "1965");
-	// proper_addr is leaking here...
-	message("Visiting %s...", proper_addr);
+	message("Visiting %s...", addr);
+	reqfd = request(addr);
+	rendertext();
 }
-
 
 
 /* PANEL CONFIGURATION */
@@ -188,6 +331,23 @@ makepanels(void)
 	plgrabkb(navbarp);
 }
 
+void
+rendertext()
+{
+	if((reqfd < 0) ||
+       (mimetype == nil) ||
+       (strncmp(mimetype, "text/", 5) != 0)) {
+		return;
+	}
+	message("Rendering...");
+
+	//plinittextview(textp, PACKE|EXPAND, ZP, m->text, navbarcb);
+	//pldraw(textp, screen);
+	//plinitlabep(urlp, PACKN|FILLX, url);
+	
+	close(reqfd);
+	message("sagittarius!");
+}
 
 // Icon-related stuff
 Image*
@@ -228,6 +388,8 @@ eresized(int new)
 void
 main(int argc, char **argv)
 {
+	reqfd = -1;
+	mimetype = nil;
 	Event e;
 	quotefmtinstall();
 
@@ -243,7 +405,7 @@ main(int argc, char **argv)
 		// visit argv[1]
 	} else {
 		// visit gemini://gemini.circumlunar.space
-		visit("gemini://gemini.circumlunar.space");
+		//visit("gemini.circumlunar.space");
 	}
 
 	eresized(0);
