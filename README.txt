@@ -1,8 +1,12 @@
 sagittarius
 ===========
+
 Yet another Gemini browser for Plan 9
 
 Lucas S. Vieira <lucasvieira@protonmail.com>
+
+READ THIS VERY CAREFULLY:
+THIS PROGRAM STILL DOES NOT WORK. WAIT PATIENTLY.
 
 What is this?
 -------------
