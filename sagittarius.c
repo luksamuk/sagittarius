@@ -67,6 +67,18 @@ message(char *s, ...)
 }
 
 
+/* CONNECTION */
+void
+visit(char *addr)
+{
+	// TODO
+	char *proper_addr = netmkaddr(addr, "tcp", "1965");
+	// proper_addr is leaking here...
+	message("Visiting %s...", proper_addr);
+}
+
+
+
 /* PANEL CONFIGURATION */
 
 // Pop-up menu callback
@@ -120,7 +132,10 @@ void
 navbarcb(Panel *p, char *t)
 {
 	USED(p);
-	message("Command entered: %s", t);
+	//message("Command entered: %s", t);
+
+	// If not a command, then...
+	visit(t);
 
 	// Reset input and force redisplay
 	plinitentry(navbarp, PACKN|FILLX, 0, "", navbarcb);
@@ -227,7 +242,8 @@ main(int argc, char **argv)
 	if(argc == 2) {
 		// visit argv[1]
 	} else {
-		// visit gopher://gemini.circumlunar.space
+		// visit gemini://gemini.circumlunar.space
+		visit("gemini://gemini.circumlunar.space");
 	}
 
 	eresized(0);

@@ -60,7 +60,8 @@ you may find.
 
 - extra/geminispec.rc:
   A small script which opens mothra on the Gemini spec.
-
+- extra/fetchtest.c
+  Study on connection over Gemini and TLS. Inspired by Gemnine.
 
 License
 -------
