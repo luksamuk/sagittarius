@@ -7,10 +7,12 @@
 #include <panel.h>
 #include <ctype.h>
 #include <bio.h>
+#include <String.h>
 #include "icons.h"
 
 /* FORWARD DECLARATIONS */
 void message(char *s, ...);
+void rendertext();
 
 
 /* GLOBALS */
@@ -211,13 +213,12 @@ failure:
 	return fd;
 }
 
-void rendertext();
-
 void
 visit(char *addr)
 {
 	message("Visiting %s...", addr);
 	reqfd = request(addr);
+	message("Rendering...");
 	rendertext();
 }
 
@@ -340,10 +341,38 @@ rendertext()
 		return;
 	}
 	message("Rendering...");
+	
+	String *buffer;
+	Rtext *text = nil;
+	Biobuf bp; // Open using file descriptor
+	char c;
+	int n;
 
-	//plinittextview(textp, PACKE|EXPAND, ZP, m->text, navbarcb);
-	//pldraw(textp, screen);
-	//plinitlabep(urlp, PACKN|FILLX, url);
+	Binit(&bp, reqfd, OREAD);
+
+	plrtstr(&text, 1000000, 0, 0, font, strdup(" "), 0, 0);
+	buffer = s_new();
+	n = 0;
+	while(1) {
+		c = Bgetc(&bp);
+		if(c < 0) {
+			break;
+		} else if (c == '\n') {
+			s_terminate(buffer);
+			plrtstr(&text, 1000000, 0, 0, font, strdup(s_to_c(buffer)), 0, 0);
+			s_reset(buffer);
+		} else {
+			s_putc(buffer, c);
+		}
+	}
+	s_terminate(buffer);
+	plrtstr(&text, 1000000, 0, 0, font, strdup(s_to_c(buffer)), 0, 0);
+	s_free(buffer);
+
+	plinittextview(textp, PACKE|EXPAND, ZP, text, nil);
+	pldraw(textp, screen);
+
+	//plinitlabel(urlp, PACKN|FILLX, url);
 	
 	close(reqfd);
 	message("sagittarius!");
@@ -405,7 +434,7 @@ main(int argc, char **argv)
 		// visit argv[1]
 	} else {
 		// visit gemini://gemini.circumlunar.space
-		//visit("gemini.circumlunar.space");
+		visit("gemini.circumlunar.space");
 	}
 
 	eresized(0);
