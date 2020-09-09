@@ -10,16 +10,17 @@ THIS PROGRAM STILL DOES NOT WORK. WAIT PATIENTLY.
 
 What is this?
 -------------
-Sagittarius is a Gemini browser for Plan 9. Gemini is a
-plain text protocol resembling Gopher, for a much simpler
-and elegant web.
+Sagittarius is a Gemini browser for Plan 9. Gemini[1] is
+a plain text protocol resembling Gopher, for a much
+simpler and elegant web.
 
-This project is HEAVILY inspired by Gopher[1], a browser
-for the homonimous protocol, and Gemnine[2], a console
+This project is HEAVILY inspired by Gopher[2], a browser
+for the homonimous protocol, and Gemnine[3], a console
 Gemini browser for Plan 9.
 
-[1] https://github.com/telephil9/gopher
-[2] https://git.sr.ht/~ft/gemnine
+[1] https://gemini.circumlunar.space/docs/specification.html
+[2] https://github.com/telephil9/gopher
+[3] https://git.sr.ht/~ft/gemnine
 
 Installation
 ------------
