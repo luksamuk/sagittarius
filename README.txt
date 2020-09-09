@@ -1,12 +1,9 @@
 sagittarius
 ===========
-
 Yet another Gemini browser for Plan 9
 
-Lucas S. Vieira <lucasvieira@protonmail.com>
+Author: Lucas S. Vieira <lucasvieira at protonmail dot com>
 
-READ THIS VERY CAREFULLY:
-THIS PROGRAM STILL DOES NOT WORK. WAIT PATIENTLY.
 
 What is this?
 -------------
@@ -18,9 +15,10 @@ This project is HEAVILY inspired by Gopher[2], a browser
 for the homonimous protocol, and Gemnine[3], a console
 Gemini browser for Plan 9.
 
-[1] https://gemini.circumlunar.space/docs/specification.html
-[2] https://github.com/telephil9/gopher
-[3] https://git.sr.ht/~ft/gemnine
+- [1] https://gemini.circumlunar.space/docs/specification.html
+- [2] https://github.com/telephil9/gopher
+- [3] https://git.sr.ht/~ft/gemnine
+
 
 Installation
 ------------
@@ -43,6 +41,7 @@ If you only wish to build and produce a local binary, use
 ...which will generate a $O.out file (where $O is a number
 related to your system architecture).
 
+
 Usage
 -----
 To open sagittarius, use
@@ -52,14 +51,16 @@ To open sagittarius, use
 if address is not supplied, it will automatically load
 gemini://gemini.circumlunar.space.
 
+
 Extras
 ------
 I might make some extra goodies to help on development.
 And I might also include them here. Here is a list of what
 you may find.
 
-- extra/geminispec.rc
+- extra/geminispec.rc:
   A small script which opens mothra on the Gemini spec.
+
 
 License
 -------
