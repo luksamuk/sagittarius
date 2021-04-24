@@ -7,10 +7,12 @@
 #include <panel.h>
 #include <ctype.h>
 #include <bio.h>
+#include <String.h>
 #include "icons.h"
 
 /* FORWARD DECLARATIONS */
 void message(char *s, ...);
+void rendertext();
 
 
 /* GLOBALS */
@@ -74,8 +76,57 @@ message(char *s, ...)
 	flushimage(display, 1);
 }
 
+void
+show_url(char *addr)
+{
+	plinitlabel(urlp, PACKN|FILLX, addr);
+	pldraw(urlp, screen);
+	flushimage(display, 1);
+}
 
 /* CONNECTION */
+
+char*
+parse_serveraddr(char *addr) {
+	char *theaddr = strdup(addr);
+	char *itr = strstr(theaddr, "gemini://");
+
+	if(itr == nil) {
+		// No protocol part
+		itr = theaddr;
+	} else {
+		// Jump protocol part
+		itr += 9;
+	}
+
+	long size;
+	char *itr2 = strpbrk(itr, "/");
+	if(itr2 == nil) {
+		// No subdir
+		size = strlen(itr);
+	} else {
+		show_url(itr2);
+		// Make new string until subdir
+		size = itr2 - itr;
+	}
+
+	char *ret = malloc((size + 1) * sizeof(char));
+	strncpy(ret, itr, size);
+	ret[size] = 0;
+	return ret;
+}
+
+char*
+parse_addr(char *addr)
+{
+	char *theaddr = strdup(addr);
+	char *itr     = strstr(theaddr, "://");
+	if(itr == nil) {
+		return smprint("gemini://%s", theaddr);
+	}
+	return theaddr;
+}
+
 int
 request(char *addr)
 {
@@ -84,18 +135,26 @@ request(char *addr)
 	int fd, okcert, status_type, status;
 	char buffer[1024];
 	int len, i;
-	char *itr, *dialaddr;
+	char *itr, *dialaddr, *theaddr, *tlsaddr;
 
-	addr = strdup(addr); // Weird. I know.
-	char *tlsaddr = smprint("gemini://%s", addr);
+	// Quick note:
+	// 'addr' is the server name. Must be 'naked'
+	// and have no protocols.
+	// 'tlsaddr' however is the full address.
+
+	// This needs a parsing tool!
+	show_url(addr);
+	theaddr  = parse_serveraddr(addr);
+	tlsaddr  = parse_addr(theaddr);
 
 startreq:
+	dialaddr = netmkaddr(theaddr, "tcp", "1965");
+	//show_url(smprint("%s / %s", dialaddr, tlsaddr));
 	// Dialing
-	dialaddr = netmkaddr(addr, "tcp", "1965");
 	message("Dialing %s...", dialaddr);
 	fd = dial(dialaddr, 0, 0, 0);
 	if(fd < 0) {
-		message("dial: %r");
+		message("dial: %s: %r", dialaddr);
 		goto failure;
 	}
 
@@ -177,18 +236,11 @@ startreq:
 		break;
 	case 30: // 3x redirect
 		mimetype = nil;
-		free(addr);
+		free(theaddr);
 		free(tlsaddr);
-		tlsaddr = strdup(itr);
-		if((tokstart = strpbrk(itr, ":/")) != nil
-		   && tokstart[0] == ':'
-		   && tokstart[1] == '/'
-		   && tokstart[2] == '/') {
-			tokstart[2] = 0;
-			tokstart = cleanname(tokstart + 3);
-			addr = strdup(tokstart);
-		} else addr = tlsaddr;
-		message("Redirecting to %s...", addr);
+		tlsaddr = parse_addr(itr);
+		theaddr = parse_serveraddr(tlsaddr);
+		message("Redirecting to %s...", theaddr);
 		goto startreq;
 		break;
 	case 40: // 4x temporary failure
@@ -206,12 +258,10 @@ startreq:
 	}
 
 failure:
-	free(addr);
+	free(theaddr);
 	free(tlsaddr);
 	return fd;
 }
-
-void rendertext();
 
 void
 visit(char *addr)
@@ -275,7 +325,7 @@ void
 navbarcb(Panel *p, char *t)
 {
 	USED(p);
-	//message("Command entered: %s", t);
+	message("Command entered: %s", t);
 
 	// If not a command, then...
 	visit(t);
@@ -332,6 +382,13 @@ makepanels(void)
 }
 
 void
+gulp_whitespace(Biobuf *bp)
+{
+	while(isspace(Bgetc(bp))) {}
+	Bungetc(bp);
+}
+
+void
 rendertext()
 {
 	if((reqfd < 0) ||
@@ -340,10 +397,82 @@ rendertext()
 		return;
 	}
 	message("Rendering...");
+	
+	String *buffer;
+	Rtext *text = nil;
+	Biobuf bp;
+	char c;
+	int n;
 
-	//plinittextview(textp, PACKE|EXPAND, ZP, m->text, navbarcb);
-	//pldraw(textp, screen);
-	//plinitlabep(urlp, PACKN|FILLX, url);
+	Binit(&bp, reqfd, OREAD);
+	buffer = s_new();
+	n = 0;
+
+	while(1) {
+		c = Bgetc(&bp);
+
+		// Potential cases:
+		// 1. Starts with #: <h1>, <h2>, <h3>
+		// 2. Starts with *: Bullet point
+		// 3. Starts with =>: Button
+
+		if(c < 0) {
+			break;
+		} else if (c == '#') {
+			// At least h1
+			if(Bgetc(&bp) == '#') {
+				// At least h2
+				if(Bgetc(&bp) == '#') {
+					// Definitely h3
+					gulp_whitespace(&bp);
+					s_append(buffer, Brdstr(&bp, '\n', 1));
+					s_terminate(buffer);
+					plrtstr(&text, 1000000, 24, 0, font, strdup(s_to_c(buffer)), 0, 0);
+					s_reset(buffer);
+				} else {
+					// Definitely h2
+					gulp_whitespace(&bp);
+					s_append(buffer, Brdstr(&bp, '\n', 1));
+					s_terminate(buffer);
+					plrtstr(&text, 1000000, 16, 0, font, strdup(s_to_c(buffer)), 0, 0);
+					s_reset(buffer);
+				}
+			} else if(c == '=') {
+				if(Bgetc(&bp) == '>') {
+					// Render link
+					gulp_whitespace(&bp);
+					s_append(buffer, Brdstr(&bp, '\n', 1));
+					s_terminate(buffer);
+					plrtstr(&text, 1000000, 32, 0, font, strdup(s_to_c(buffer)), 1, 0);
+					s_reset(buffer);
+				} else {
+					// False alarm, just append c
+					Bungetc(&bp);
+					s_putc(buffer, c);
+				}
+			} else {
+				Bungetc(&bp);
+				// Definitely h1
+				gulp_whitespace(&bp);
+				s_append(buffer, Brdstr(&bp, '\n', 1));
+				s_terminate(buffer);
+				plrtstr(&text, 1000000, 4, 0, font, strdup(s_to_c(buffer)), 0, 0);
+				s_reset(buffer);
+			}
+		} else if (c == '\n') {
+			s_terminate(buffer);
+			plrtstr(&text, 1000000, 32, 0, font, strdup(s_to_c(buffer)), 0, 0);
+			s_reset(buffer);
+		} else {
+			s_putc(buffer, c);
+		}
+	}
+	s_terminate(buffer);
+	plrtstr(&text, 1000000, 0, 0, font, strdup(s_to_c(buffer)), 0, 0);
+	s_free(buffer);
+
+	plinittextview(textp, PACKE|EXPAND, ZP, text, nil);
+	pldraw(textp, screen);
 	
 	close(reqfd);
 	message("sagittarius!");
@@ -403,9 +532,10 @@ main(int argc, char **argv)
 
 	if(argc == 2) {
 		// visit argv[1]
+		//visit(argv[1]);
 	} else {
 		// visit gemini://gemini.circumlunar.space
-		//visit("gemini.circumlunar.space");
+		visit("gemini://gemini.circumlunar.space/users/");
 	}
 
 	eresized(0);
