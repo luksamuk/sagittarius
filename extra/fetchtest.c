@@ -5,6 +5,7 @@
 #include <ctype.h>
 #include <bio.h>
 
+#define WEBSITE "gemini.circumlunar.space"
 
 void
 main()
@@ -14,10 +15,8 @@ main()
 	int fd, tlsfd, okcert;
 	char buffer[1024];
 
-	char *addr = strdup("gemini.circumlunar.space");
-	char *tlsaddr =
-		strdup(
-		"gemini://gemini.circumlunar.space");
+	char *addr    = strdup(WEBSITE);
+	char *tlsaddr = strdup("gemini://" WEBSITE);
 
 startreq:
 	printf("Dialing\n");
@@ -43,9 +42,10 @@ startreq:
 		okcert = okCertificate(conn.cert, conn.certlen, th);
 		freeThumbprints(th);
 		if(!okcert) {
-			//fprint(2, "echo 'x509 %r server=%s' >> /sys/lib/ssl/gemini\n", addr);
-			//sysfatal("untrusted cert");
-			//exits("untrusted cert");
+			print("Untrusted cert! Please add cert to trusted certs:")
+			print("echo 'x509 %r' >> /sys/lib/ssl/gemini\n", addr);
+			sysfatal("untrusted cert");
+			exits("untrusted cert");
 		}
 	}
 
